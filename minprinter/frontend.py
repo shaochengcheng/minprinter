@@ -4,10 +4,12 @@
 """
 
 import logging
+import numbers
 import os
 from os.path import expanduser, join
 
 from appJar import gui
+from openpyxl import load_workbook
 
 from .backend import print_invoice
 
@@ -45,7 +47,7 @@ class MPrinterGUI():
                              do_analysis=True)
         self.was_run = False
         self.last_settings = self.settings.copy()
-        self.output_filenames = dict(stats='output-statistics.xlsx',
+        self.output_filenames = dict(stats='output-results.xlsx',
                                      pdf='output-jpg-a4.pdf')
         self.log_file = expanduser(join('~', 'minprinter-log.txt'))
         add_my_file_logging(logging.getLogger(), filename=self.log_file)
@@ -86,12 +88,12 @@ class MPrinterGUI():
                     return
         # run background function
         try:
-            df = print_invoice(input_dir=self.settings['input_dir'],
-                               output_dir=self.settings['output_dir'],
-                               output_filenames=self.output_filenames,
-                               dpi=self.settings['dpi'],
-                               recursive=self.settings['recursive'],
-                               do_analysis=self.settings['do_analysis'])
+            print_invoice(input_dir=self.settings['input_dir'],
+                          output_dir=self.settings['output_dir'],
+                          output_filenames=self.output_filenames,
+                          dpi=self.settings['dpi'],
+                          recursive=self.settings['recursive'],
+                          do_analysis=self.settings['do_analysis'])
         except Exception as err:
             self.app.errorBox('Error', str(err))
             raise
@@ -102,19 +104,35 @@ class MPrinterGUI():
         self.app.clearTextArea('Logs')
         self.app.setTextArea('Logs', logs)
         self.app.openTab('TabbedFrame', 'Results')
-        self.app.clearTextArea('Results')
-        df = df.reset_index()
-        df = df[df.columns[[0, 3, 1, 4]]].drop_duplicates()
-        df = df.reset_index(drop=True)
-        additional_tip = """\n\r\n\r\n\r
-Please check the detailed statistics results file {!r} in output\
-directory {!r}""".format(self.output_filenames['stats'],
-                         self.settings['output_dir'])
-        r_content = df.to_string(col_space=8, justify='left') + additional_tip
-        self.app.setTextArea('Results', r_content)
+        #         additional_tip = """\n\r\n\r\n\r
+        # Please check the detailed statistics results file {!r} in output\
+        # directory {!r}""".format(self.output_filenames['stats'],
+        #                          self.settings['output_dir'])
+        #         self.app.message(title='Additional Info',
+        #                          value=additional_tip,
+        #                          width=750)
+        self.app.openScrollPane('pane')
+        try:
+            excel_filename = join(self.settings['output_dir'],
+                                  self.output_filenames['stats'])
+            wb = load_workbook(excel_filename)
+            ws = wb.worksheets[0]
+            data = [
+                list(
+                    map(
+                        lambda v: '{:.2f}'.format(v)
+                        if isinstance(v, numbers.Number) else v, rv))
+                for rv in ws.values
+            ]
+            self.app.table(title='results', value=data, width=800)
+        except Exception as err:
+            self.app.errorBox('Error', str(err))
+            raise
         self.app.setTabbedFrameSelectedTab('TabbedFrame', 'Results')
         self.was_run = True
         self.last_settings = self.settings.copy()
+        self.app.stopScrollPane()
+        self.app.stopTabbedFrame()
 
     def on_input_dir_change(self):
         """Function when DirectoryEntry `input_dir` changes.
@@ -127,7 +145,7 @@ directory {!r}""".format(self.output_filenames['stats'],
         """
         self.app.setBg('#FFFFFF')
         # app.setTransparency(0.8)
-        self.app.setSize(600, 350)
+        self.app.setSize(800, 350)
         self.app.setResizable(canResize=False)
         self.app.setLocation("CENTER")
         self.app.setFont(size=11)
@@ -178,11 +196,12 @@ directory {!r}""".format(self.output_filenames['stats'],
 
         # Results Tab
         self.app.startTab("Results")
-        self.app.addScrolledTextArea('Results')
+        self.app.startScrollPane("pane")
+        self.app.stopScrollPane()
         self.app.stopTab()
         # Loggs Tab
         self.app.startTab("Logs")
-        self.app.addScrolledTextArea('Logs')
+        self.app.addScrolledTextArea("Logs")
         self.app.stopTab()
         self.app.stopTabbedFrame()
 

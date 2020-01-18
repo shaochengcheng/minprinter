@@ -4,16 +4,20 @@
 Author: sccotte@gmail.com
 """
 
+import itertools
 import logging
+import operator
 import os
 import platform
 import re
+from copy import copy
 from glob import glob
 from os.path import basename, join
 from subprocess import PIPE, Popen
 from tempfile import NamedTemporaryFile
 
-import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, Side
 from pdf2image import convert_from_path, pdfinfo_from_path
 from PIL import Image
 
@@ -244,6 +248,244 @@ def to_a4_jpg_pdf(images, outfile, dpi=600):
     pages[0].save(outfile, "PDF", save_all=True, append_images=pages[1:])
 
 
+def year_and_quarter(date_str):
+    """Return the year and quarter as numeric.
+    date_str should be 'yyyymm'
+    """
+    date_str = str(date_str)
+    year = int(date_str[:4])
+    month = int(date_str[4:6])
+    quarter = (month - 1) // 3 + 1
+    return (year, quarter)
+
+
+def groupby(l, by):
+    """return k, group: where k is the unique key and group is an iterable.
+
+    Paramters
+    -----------
+      l: list of list
+      by: list of integer
+        the column indexes
+    """
+    ll = sorted(l, key=operator.itemgetter(*by))
+    return itertools.groupby(ll, key=operator.itemgetter(*by))
+
+
+def excel_merge_cells(ws,
+                      start_row,
+                      start_column,
+                      end_row,
+                      end_column,
+                      value=None):
+    """A quick function to merge excel cells and set alignment as centered.
+    """
+    ws.merge_cells(start_row=start_row,
+                   end_row=end_row,
+                   start_column=start_column,
+                   end_column=end_column)
+    lt_cell = ws.cell(row=start_row, column=start_column)
+    if value is not None:
+        lt_cell.value = value
+
+
+def set_outline_border(ws,
+                       border_style,
+                       min_row,
+                       max_row,
+                       min_col=1,
+                       max_col=7,
+                       color='000000'):
+    """Set the outline border with box (min_row, max_row, min_col, max_col).
+    """
+    border = Side(border_style=border_style, color=color)
+    # top
+    for row in ws.iter_rows(min_row=min_row,
+                            max_row=min_row,
+                            min_col=min_col,
+                            max_col=max_col):
+        for cell in row:
+            top = copy(cell.border.top)
+            right = copy(cell.border.right)
+            bottom = copy(cell.border.bottom)
+            left = copy(cell.border.left)
+            cell.border = Border(top=border,
+                                 right=right,
+                                 bottom=bottom,
+                                 left=left)
+    # right
+    for row in ws.iter_rows(min_row=min_row,
+                            max_row=max_row,
+                            min_col=max_col,
+                            max_col=max_col):
+        for cell in row:
+            top = copy(cell.border.top)
+            right = copy(cell.border.right)
+            bottom = copy(cell.border.bottom)
+            left = copy(cell.border.left)
+            cell.border = Border(top=top,
+                                 right=border,
+                                 bottom=bottom,
+                                 left=left)
+    # bottom
+    for row in ws.iter_rows(min_row=max_row,
+                            max_row=max_row,
+                            min_col=min_col,
+                            max_col=max_col):
+        for cell in row:
+            top = copy(cell.border.top)
+            right = copy(cell.border.right)
+            bottom = copy(cell.border.bottom)
+            left = copy(cell.border.left)
+            cell.border = Border(top=top,
+                                 right=right,
+                                 bottom=border,
+                                 left=left)
+    # left
+    for row in ws.iter_rows(min_row=min_row,
+                            max_row=max_row,
+                            min_col=min_col,
+                            max_col=min_col):
+        for cell in row:
+            top = copy(cell.border.top)
+            right = copy(cell.border.right)
+            bottom = copy(cell.border.bottom)
+            left = copy(cell.border.left)
+            cell.border = Border(top=top,
+                                 right=right,
+                                 bottom=bottom,
+                                 left=border)
+
+
+def save_to_excel(rst, xlsx_filename):
+    """Pure python codes: save results to excel and as string.
+    rst should be sorted.
+    """
+    # worksheet
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '高性能计算应用中心'
+    # headers
+    ws.alignment = Alignment(horizontal='right', vertical='center')
+    ws.cell(row=1, column=1, value='姓名')
+    ws.cell(row=1, column=2, value='年份季度')
+    ws.cell(row=1, column=3, value='手机号')
+    ws.cell(row=1, column=4, value='账单月')
+    ws.cell(row=1, column=5, value='账单金额')
+    ws.cell(row=1, column=6, value='季度/号码')
+    ws.cell(row=1, column=7, value='季度/人')
+    # fill the sheet
+    for i, row in enumerate(rst):
+        ws.cell(row=i + 2, column=1, value=rst[i][0])
+        ws.cell(row=i + 2, column=2, value=rst[i][1])
+        ws.cell(row=i + 2, column=3, value=rst[i][5])
+        ws.cell(row=i + 2, column=4, value=rst[i][4])
+        ws.cell(row=i + 2, column=5, value=rst[i][6]).number_format = '0.00'
+        ws.cell(row=i + 2, column=6).number_format = '0.00'
+        ws.cell(row=i + 2, column=7).number_format = '0.00'
+    # groupby (u_name, u_phone, y_q_str) and sum
+    groups = []
+    group_sizes = []
+    for k, group in groupby(rst, (0, 1, 5)):
+        group = [v[6] for v in group]
+        groups.append(group)
+        group_sizes.append(len(group))
+    group_row_pointers = list(itertools.accumulate([2] + group_sizes))
+    # sum and merge
+    for i in range(len(groups)):
+        # quarter_sum_per_phone
+        start_row = group_row_pointers[i]
+        end_row = group_row_pointers[i + 1] - 1
+        excel_merge_cells(ws,
+                          start_row=start_row,
+                          end_row=end_row,
+                          start_column=6,
+                          end_column=6,
+                          value=sum(groups[i]))
+        # u_phone
+        excel_merge_cells(ws,
+                          start_row=start_row,
+                          end_row=end_row,
+                          start_column=3,
+                          end_column=3)
+    # groupby (u_name, y_q_str) and sum
+    groups = []
+    group_sizes = []
+    for k, group in groupby(rst, (0, 1)):
+        group = [v[6] for v in group]
+        groups.append(group)
+        group_sizes.append(len(group))
+    group_row_pointers = list(itertools.accumulate([2] + group_sizes))
+    # sum and merge
+    for i in range(len(groups)):
+        # quarter_sum_per_user
+        start_row = group_row_pointers[i]
+        end_row = group_row_pointers[i + 1] - 1
+        excel_merge_cells(ws,
+                          start_row=start_row,
+                          end_row=end_row,
+                          start_column=7,
+                          end_column=7,
+                          value=sum(groups[i]))
+        # y_q_str
+        excel_merge_cells(ws,
+                          start_row=start_row,
+                          end_row=end_row,
+                          start_column=2,
+                          end_column=2)
+        # border
+        set_outline_border(ws,
+                           min_row=start_row,
+                           max_row=end_row,
+                           border_style='thin')
+        set_outline_border(ws,
+                           min_row=start_row,
+                           max_row=end_row,
+                           min_col=1,
+                           max_col=1,
+                           border_style='thin')
+    # groupby (u_name) and sum
+    groups = []
+    group_sizes = []
+    for k, group in groupby(rst, (0, )):
+        group = list(group)
+        groups.append(group)
+        group_sizes.append(len(group))
+    group_row_pointers = list(itertools.accumulate([2] + group_sizes))
+    # merge and border
+    for i in range(len(groups)):
+        excel_merge_cells(ws,
+                          start_row=group_row_pointers[i],
+                          end_row=group_row_pointers[i + 1] - 1,
+                          start_column=1,
+                          end_column=1)
+    ws.column_dimensions['B'].width = 15
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['F'].width = 10
+    ws.column_dimensions['G'].width = 10
+    ws.row_dimensions[1].height = 32
+    # alignment
+    for row in ws.iter_rows(max_row=len(rst) + 1, min_col=1, max_col=4):
+        for cell in row:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+    # alignment
+    for row in ws.iter_rows(max_row=len(rst) + 1, min_col=5, max_col=7):
+        for cell in row:
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+    # alignment and font
+    for row in ws.iter_rows(max_row=1, min_col=1, max_col=7):
+        for cell in row:
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.font = Font(bold=True, size=11)
+    # out line bolder
+    set_outline_border(ws, min_row=1, max_row=1, border_style='medium')
+    set_outline_border(ws,
+                       min_row=1,
+                       max_row=len(rst) + 1,
+                       border_style='medium')
+    wb.save(xlsx_filename)
+
+
 def print_invoice(input_dir,
                   output_dir,
                   output_filenames,
@@ -261,66 +503,39 @@ def print_invoice(input_dir,
                      recursive=recursive,
                      exclude_basenames=output_filenames.values())
     logger.info('PDF files are: %r', pdfs)
-    stats = []
+    results = []
     if do_analysis is True:
         logger.info('Searching text in the invoice PDF files ...')
         for pdf_path in pdfs:
             text_str = to_text_str(pdf_path, poppler_path=poppler_path)
-            stats.append(parse_text(text_str) + (pdf_path, ))
-        # (user_name, user_phoneno, bill_date, bill_amount)
+            results.append(parse_text(text_str) + (pdf_path, ))
+        # (user_name, user_phoneno, bill_date, bill_amount, pdf_path)
         logger.info('Aggregating the data ...')
-        df = pd.DataFrame(stats,
-                          columns=[
-                              'user_name', 'user_phoneno', 'bill_date',
-                              'bill_amount', 'pdf_path'
-                          ])
-        df['user_name'] = df.user_name.astype('str')
-        df['user_phoneno'] = df.user_phoneno.astype('str')
-        df['bill_date_dt'] = pd.to_datetime(df.bill_date, format='%Y%m')
-        df['bill_amount'] = df.bill_amount.astype('float')
-        df['pdf_path'] = df.pdf_path.astype('str')
-        df.sort_values(by=['user_name', 'user_phoneno', 'bill_date_dt'],
-                       inplace=True)
-        df['bill_year_quarter'] = df.bill_date_dt.dt.year.astype(
-            'str') + '年第' + df.bill_date_dt.dt.quarter.astype('str') + '季度'
-        quarter_df_per_phone = df.groupby(
-            ['user_phoneno', 'bill_year_quarter']).bill_amount.sum().rename(
-                'quarter_per_phone_per_user').reset_index()
-        quarter_df_per_user = df.groupby([
-            'user_name', 'bill_year_quarter'
-        ]).bill_amount.sum().rename('quarter_per_user').reset_index()
-        df = pd.merge(df,
-                      quarter_df_per_phone,
-                      on=['user_phoneno', 'bill_year_quarter'])
-        df = pd.merge(df,
-                      quarter_df_per_user,
-                      on=['user_name', 'bill_year_quarter'])
-        df.sort_values(
-            by=['user_name', 'bill_year_quarter', 'user_phoneno', 'bill_date'],
-            inplace=True)
-        mindex_columns = [
-            'user_name', 'bill_year_quarter', 'quarter_per_user',
-            'user_phoneno', 'quarter_per_phone_per_user', 'bill_date'
-        ]
-        writen_columns = ['bill_amount']
-        chinese_header_dict = dict(user_name=r'姓名',
-                                   bill_year_quarter=r'年份季度',
-                                   quarter_per_user=r'个人季度小计',
-                                   user_phoneno=r'手机号',
-                                   quarter_per_phone_per_user=r'个人每号码季度小计',
-                                   bill_date=r'账单月',
-                                   bill_amount=r'账单金额')
-        df_excel = df[mindex_columns +
-                      writen_columns].rename(columns=chinese_header_dict)
-        df_excel = df_excel.set_index(
-            [chinese_header_dict[c] for c in mindex_columns])
-        logger.info('Saving statistics results as excel: %r',
-                    outfile_statistics)
-        df_excel.to_excel(
-            outfile_statistics,
-            sheet_name=r'高性能计算应用中心季度通讯费',
-            columns=[chinese_header_dict[c] for c in writen_columns])
-        pdfs = df.pdf_path.tolist()
+        r_dict = dict(u_names=[],
+                      y_q_str=[],
+                      b_years=[],
+                      b_quarters=[],
+                      b_dates=[],
+                      u_phones=[],
+                      b_amounts=[],
+                      pdf_paths=[])
+        for u_name, u_phone, b_date, b_amount, pdf_path in results:
+            b_year, b_quarter = year_and_quarter(b_date)
+            r_dict['u_names'].append(str(u_name))
+            r_dict['y_q_str'].append(
+                str(b_year) + '年第' + str(b_quarter) + '季度')
+            r_dict['b_years'].append(b_year)
+            r_dict['b_quarters'].append(b_quarter)
+            r_dict['b_dates'].append(str(b_date))
+            r_dict['u_phones'].append(str(u_phone))
+            r_dict['b_amounts'].append(float(b_amount))
+            r_dict['pdf_paths'].append(str(pdf_path))
+        results = zip(r_dict['u_names'], r_dict['y_q_str'], r_dict['b_years'],
+                      r_dict['b_quarters'], r_dict['b_dates'],
+                      r_dict['u_phones'], r_dict['b_amounts'],
+                      r_dict['pdf_paths'])
+        results = sorted(results, key=operator.itemgetter(0, 1, 5))
+        save_to_excel(results, outfile_statistics)
     logger.info('Converting PDF to jpg ...')
     images = pdf_to_jpg(pdfs, dpi=dpi)
     # to_raw_jpg_pdf(images, outfile_raw_jpg_pdf)
@@ -329,4 +544,3 @@ def print_invoice(input_dir,
         outfile_a4_jpg_pdf)
     to_a4_jpg_pdf(images, outfile_a4_jpg_pdf, dpi=dpi)
     logger.info('Backend Done')
-    return df_excel
