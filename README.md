@@ -1,6 +1,9 @@
 This is a tool to help print invoices from
 China Mobile, China Unicom and China Telcom.
 
+Binary download:
+  - Go to [release](https://github.com/shaochengcheng/minprinter/releases)
+
 
 Features:
   - do statstics by searching text from pdf file (using pdftotext)
