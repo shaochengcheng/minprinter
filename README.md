@@ -1,11 +1,12 @@
 This is a tool to help print invoices from
-China Mobile and China Unicom.
+China Mobile, China Unicom and China Telcom.
 
 
 Features:
   - do statstics by searching text from pdf file (using pdftotext)
   - convert pdf into jpg to avoid signed PDF that forbid merging (using pdf2image)
   - place two images on one a4-size pdf page to print
+  - a windows exe to run standalone (using Pyinstaller)
 
 Prerequirement:
   - python 3.7 tested
