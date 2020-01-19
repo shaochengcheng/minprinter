@@ -18,3 +18,8 @@ Prerequirement:
 Installation:
   - python setup.py install
 
+To use Pyinstaller:
+  - pyinstaller to_exe/minprint.spec (as bundle folder)
+  - pyinstaller to_exe/minprint-ALLINONE.spec (as onefile)
+  - Or, check [Pyinstaller documents](https://pythonhosted.org/PyInstaller/)
+
