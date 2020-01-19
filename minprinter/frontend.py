@@ -103,18 +103,17 @@ class MPrinterGUI():
             logs = fp.read()
         self.app.clearTextArea('Logs')
         self.app.setTextArea('Logs', logs)
+        self.app.stopTab()
         self.app.openTab('TabbedFrame', 'Results')
-        #         additional_tip = """\n\r\n\r\n\r
-        # Please check the detailed statistics results file {!r} in output\
-        # directory {!r}""".format(self.output_filenames['stats'],
-        #                          self.settings['output_dir'])
-        #         self.app.message(title='Additional Info',
-        #                          value=additional_tip,
-        #                          width=750)
         self.app.openScrollPane('pane')
+        excel_filename = join(self.settings['output_dir'],
+                              self.output_filenames['stats'])
+        additional_tip = """Please check the excel file: {!r}\n\r""".format(
+            excel_filename)
+        self.app.message(title='Additional Info',
+                         value=additional_tip,
+                         width=800)
         try:
-            excel_filename = join(self.settings['output_dir'],
-                                  self.output_filenames['stats'])
             wb = load_workbook(excel_filename)
             ws = wb.worksheets[0]
             data = [
@@ -132,7 +131,7 @@ class MPrinterGUI():
         self.was_run = True
         self.last_settings = self.settings.copy()
         self.app.stopScrollPane()
-        self.app.stopTabbedFrame()
+        self.app.stopTab()
 
     def on_input_dir_change(self):
         """Function when DirectoryEntry `input_dir` changes.
@@ -235,7 +234,6 @@ def add_poppler_to_os_path(poppler_bin=None):
 def gui_main():
     """The entry function to run the GUI of this programe
     """
-    add_poppler_to_os_path()
     try:
         printer = MPrinterGUI()
         printer.start_gui()

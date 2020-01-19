@@ -33,7 +33,6 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
     install_requires=[
-        'appJar>=0.94.0', 'pandas>=0.25.3', 'openpyxl>=3.0.2',
-        'pdf2image>=1.11.0'
+        'appJar>=0.94.0', 'openpyxl>=3.0.2', 'pdf2image>=1.11.0'
     ],
 )
