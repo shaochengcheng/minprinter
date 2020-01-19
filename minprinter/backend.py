@@ -111,14 +111,10 @@ def parse_text(text_str):
     """ Parse the text content from invoice PDF to get name, phone and billing
         amount from a user.
     """
-    user_name_regex = r'名\s*称\W\s?([\u4e00-\u9fff]{2,4})\s+'
+    user_name_regex = r'名\s*称\W\s?([\u4e00-\u9fff]{2,})\s+'
     user_phoneno_regex = r'号码\W\s?(\d{11})'
-    bill_date_regex = r'账期\W\s?(\d{6})'
+    bill_date_regex = r'[账帐]期\W\s?(\d{6})'
     bill_amount_regex = r'\W小写\W+(\d+\.\d{2})'
-    # user_name_regex = r'称(:|：)\s?([\u4e00-\u9fff]{2,4})\s+'
-    # user_phoneno_regex = r'号码(:|：)\s?(\d{11})'
-    # bill_date_regex = r'账期(:|：)\s?(\d{6})'
-    # bill_amount_regex = r'(\(|）小写(\)).(\d+\.\d+)'
     r1 = re.search(user_name_regex, text_str, flags=re.U)
     r2 = re.search(user_phoneno_regex, text_str, flags=re.U)
     r3 = re.search(bill_date_regex, text_str, flags=re.U)
@@ -126,6 +122,10 @@ def parse_text(text_str):
     any_fail_flag = False
     if r1:
         user_name = r1.group(1)
+        if len(user_name) >= 4:
+            logger.warning('Name %r is too long, use the last three chars.',
+                           user_name)
+            user_name = user_name[-3:]
     else:
         any_fail_flag = True
         logger.error('Cannot extract user name with regular express %r',

@@ -33,9 +33,11 @@ def add_my_file_logging(
 
 
 class MPrinterGUI():
-    """ A class to print invoices from china mobile or unicom.
+    """ A class to print invoices from China Mobile, Chia Unicom, and
+    China Telecom.
     """
-    def __init__(self, name='China Mobile and Unicom Invoices Printer'):
+    def __init__(self,
+                 name='Invoices Printer for China Mobile, Unicom & Telecom'):
         self.app = gui(name)
         self.setting_keys = [
             'input_dir', 'output_dir', 'dpi', 'recursive', 'do_analysis'
@@ -196,6 +198,7 @@ class MPrinterGUI():
         # Results Tab
         self.app.startTab("Results")
         self.app.startScrollPane("pane")
+        self.app.message('result', value='', width=800)
         self.app.stopScrollPane()
         self.app.stopTab()
         # Loggs Tab
