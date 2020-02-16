@@ -65,6 +65,10 @@ lucene-index/
 
 # logs in tests
 tests/*.log
+tests/data
+tests/data/
+tests/data/*
+tests/data/**
 
 docker/shared
 docker/shared/
